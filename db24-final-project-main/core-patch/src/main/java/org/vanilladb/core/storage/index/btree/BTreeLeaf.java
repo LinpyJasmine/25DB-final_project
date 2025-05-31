@@ -87,7 +87,16 @@ public class BTreeLeaf {
 	static String keyFieldName(int index) {
 		return SCH_KEY + index;
 	}
+	public int getNumRecs() {
+    	return currentPage.getNumRecords();
+	}
 
+	public static int getSlotCount(BlockId blk, SearchKeyType keyType, Transaction tx) {
+    	BTreeLeaf leaf = new BTreeLeaf(blk, keyType, tx);
+    	int count = leaf.getNumRecs(); // ✅ 改為 currentPage.getNumRecords() 就可以用了
+    	leaf.close();
+    	return count;
+	}
 	/**
 	 * Returns the schema of the B-tree leaf records.
 	 * 

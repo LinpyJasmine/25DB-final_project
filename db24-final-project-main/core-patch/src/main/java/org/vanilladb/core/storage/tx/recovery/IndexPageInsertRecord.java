@@ -127,7 +127,7 @@ public class IndexPageInsertRecord implements LogRecord {
 
 	}
 
-	@Override
+	/*@Override
 	public void redo(Transaction tx) {
 		Buffer BlockBuff;
 		if (isDirPage) {
@@ -144,7 +144,37 @@ public class IndexPageInsertRecord implements LogRecord {
 		}
 		tx.bufferMgr().unpin(BlockBuff);
 
-	}
+	}*/
+
+	@Override
+	public void redo(Transaction tx) {
+    	Buffer BlockBuff;
+    	if (isDirPage) {
+        	BlockBuff = tx.bufferMgr().pin(indexBlkId);
+        	if (this.lsn.compareTo(BlockBuff.lastLsn()) > 0) {
+            	int slotCount = BTreeDir.getSlotCount(indexBlkId, keyType, tx);
+            	if (slotId < 0 || slotId >= slotCount) {
+                	System.err.println("[WARN] Skip invalid redo insert at slot " + slotId +
+                    	    " on " + indexBlkId + " (dir page, slotCount = " + slotCount + ")");
+            	} else {
+                	BTreeDir.insertASlot(tx, indexBlkId, keyType, slotId);
+            	}
+        	}
+    	} else {
+        	BlockBuff = tx.bufferMgr().pin(indexBlkId);
+        	if (this.lsn.compareTo(BlockBuff.lastLsn()) > 0) {
+            	int slotCount = BTreeLeaf.getSlotCount(indexBlkId, keyType, tx);
+            	if (slotId < 0 || slotId > slotCount) {
+                	System.err.println("[WARN] Skip invalid redo insert at slot " + slotId +
+                    	    " on " + indexBlkId + " (leaf page, slotCount = " + slotCount + ")");
+            	} else {
+                	BTreeLeaf.insertASlot(tx, indexBlkId, keyType, slotId);
+            	}
+        	}
+    	}
+    tx.bufferMgr().unpin(BlockBuff);
+}
+
 
 	@Override
 	public String toString() {

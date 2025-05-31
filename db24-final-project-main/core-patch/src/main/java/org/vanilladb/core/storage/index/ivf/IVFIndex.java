@@ -26,13 +26,13 @@ import org.vanilladb.core.storage.tx.Transaction;
 import org.vanilladb.core.util.CoreProperties;
 
 public class IVFIndex extends Index {
-    
+
     private static final String SCHEMA_KEY = "key", SCHEMA_RID_BLOCK = "block", SCHEMA_RID_ID = "id";
     public static final int NUM_CLUSTERS;
 
     static {
         NUM_CLUSTERS = CoreProperties.getLoader().getPropertyAsInteger(
-            IVFIndex.class.getName() + ".NUM_CLUSTERS", 100);
+                IVFIndex.class.getName() + ".NUM_CLUSTERS", 100);
     }
 
     private static String keyFieldName(int index) {
@@ -51,7 +51,7 @@ public class IVFIndex extends Index {
     private SearchKey searchKey;
     private RecordFile rf;
     private boolean isBeforeFirsted;
-    
+    private List<float[]> centroids = null;
 
     public IVFIndex(IndexInfo ii, SearchKeyType keyType, Transaction tx) {
         super(ii, keyType, tx);
@@ -93,7 +93,7 @@ public class IVFIndex extends Index {
     public boolean next() {
         if (!isBeforeFirsted)
             throw new IllegalStateException("You must call beforeFirst() before iterating index '" + ii.indexName() + "'");
-        
+
         while (rf.next()) {
             if (getKey().equals(searchKey))
                 return true;
@@ -142,10 +142,10 @@ public class IVFIndex extends Index {
         if (doLogicalLogging)
             tx.recoveryMgr().logIndexDeletionEnd(ii.indexName(), key, dataRecordId.block().number(), dataRecordId.id());
     }
+
     public static long searchCost(SearchKeyType keyType, long totRecs, long matchRecs) {
-        // 預估成本：總資料筆數 ÷ 簡單估計 cluster 數，再乘搜尋 cluster 中平均資料量比例
         int rpb = Buffer.BUFFER_SIZE / RecordPage.slotSize(schema(keyType));
-    return (totRecs / rpb) / NUM_CLUSTERS;
+        return (totRecs / rpb) / NUM_CLUSTERS;
     }
 
     @Override
@@ -161,21 +161,18 @@ public class IVFIndex extends Index {
 
     private SearchKey getKey() {
         Constant[] vals = new Constant[keyType.length()];
-        for (int i = 0; i < vals.length; i++)
+        for (int i = 0; i < keyType.length(); i++)
             vals[i] = rf.getVal(keyFieldName(i));
         return new SearchKey(vals);
     }
 
-    private List<float[]> centroids = null;
-
-// 載入 centroids 到記憶體（只會執行一次）
     private void loadCentroids() {
         if (centroids != null)
             return;
 
         centroids = new ArrayList<>();
         String centroidTblName = ii.indexName() + "_centroids";
-        TableInfo ti = new TableInfo(centroidTblName, schema(keyType)); // same keyType
+        TableInfo ti = new TableInfo(centroidTblName, schema(keyType));
 
         RecordFile rf = ti.open(tx, false);
         rf.beforeFirst();
@@ -188,7 +185,6 @@ public class IVFIndex extends Index {
         rf.close();
     }
 
-    // 根據 L2 距離選出最近的 cluster
     private int getClusterId(SearchKey key) {
         loadCentroids();
 
@@ -204,15 +200,13 @@ public class IVFIndex extends Index {
             double dist = 0;
             for (int j = 0; j < centroid.length; j++) {
                 double diff = queryVec[j] - centroid[j];
-            dist += diff * diff;
+                dist += diff * diff;
+            }
+            if (dist < minDist) {
+                minDist = dist;
+                nearestIdx = i;
+            }
         }
-
-        if (dist < minDist) {
-            minDist = dist;
-            nearestIdx = i;
-        }
-        }
-    return nearestIdx;
+        return nearestIdx;
     }
-
 }

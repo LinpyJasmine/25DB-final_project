@@ -69,6 +69,16 @@ public class BTreeDir {
 		// Close the directory
 		dir.close();
 	}
+	public int getNumRecs() {
+    	return currentPage.getNumRecords();
+	}
+
+	public static int getSlotCount(BlockId blk, SearchKeyType keyType, Transaction tx) {
+    	BTreeDir dir = new BTreeDir(blk, keyType, tx);
+    	int count = dir.getNumRecs();
+    	dir.close();
+    	return count;
+	}
 
 	public static String getFileName(String indexName) {
 		return indexName + FILENAME_POSTFIX;
